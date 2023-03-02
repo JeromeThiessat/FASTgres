@@ -1,10 +1,8 @@
 
 import datetime
-import re
 import hashlib
 import numpy as np
 import utility as u
-import vectorizer
 from query import Query
 
 
@@ -17,31 +15,6 @@ def get_explain_analyze_result(db_string, query_path):
     cursor.close()
     conn.close()
     return res
-
-
-def get_first_join_cardinality(explain_analyze_result, filter_elements):
-    # filter_element -> cardinality from first join
-    cardinality_dict = dict()
-    for filter_element in filter_elements:
-        filter_line = vectorizer.first_join_from_res(explain_analyze_result, filter_element)
-        row_pattern = r'rows=\d+'
-        rows = re.findall(row_pattern, filter_line)
-        rows = int(rows[1].split('=')[1])
-        cardinality_dict[filter_element] = rows
-    return cardinality_dict
-
-
-def main_old(queries, mm_path, db_string):
-    path = "queries/job_queries/"
-    predicates, encoders = vectorizer.load_or_build_baseline(path, queries, "", db_string)
-    mm_dict = u.load_json(mm_path)
-    encoded_queries = list()
-    for query in queries:
-        parsed_query = u.parse_query(path, query)
-        encoded_query = vectorizer.encode_query(parsed_query, predicates, encoders, mm_dict)
-        encoded_queries.append(encoded_query)
-        print("Encoded query: {} to: {}".format(query, encoded_query))
-    return
 
 
 def encode_query(context: frozenset, feature_dict: dict, d_type_dict: dict):

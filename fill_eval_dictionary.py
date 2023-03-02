@@ -1,22 +1,11 @@
 
 import utility as u
 import argparse
-
 from hint_sets import HintSet
 from tqdm import tqdm
 
 
 def run():
-    # done (c for complete):
-    # represent - c
-    # full_random - 10-c, 20-c, 30-c, 40-c, 50-c, 60-c, 70-c, 80-c, 90-c,
-    # context_random - 10-c, 20-c, 30-c, 40-c, 50-, 60-, 70-, 80-, 90-,
-    #
-    # evaluation/context_random/10/fastgres/prediction.json
-    # python fill_eval_dictionary.py -p evaluation/context_random/90/fastgres/prediction.json -s initial -b True evaluation/eval_dict.json
-    # python fill_eval_dictionary.py -p evaluation/context_random/90/fastgres/prediction.json -s intermediate -b True evaluation/eval_dict.json
-    # python fill_eval_dictionary.py -p evaluation/context_random/90/fastgres/prediction.json -s final -b True evaluation/eval_dict.json
-    # python fill_eval_dictionary.py -p stack_test_prediction.json evaluation/eval_dict.json
     print('Using Dictionary Filling v.0.0.6 - Stack')
     parser = argparse.ArgumentParser(description="Evaluate Fastgres on given strategy")
     parser.add_argument("eval", default=None, help="Evaluation dictionary path")

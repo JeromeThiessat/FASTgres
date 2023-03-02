@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram
 
-# for now, most of these functions are for possible future work
+# for now, most of these functions are unused and for possible future work
 
 def merge_context_queries(context_query_dict: dict):
     new_dict = dict()
@@ -88,10 +88,6 @@ def roll_up_context_dict(context_dict: dict, query_threshold: int, merge_distanc
         cluster = AgglomerativeClustering(metric="precomputed", linkage="single",
                                           distance_threshold=merge_distance, n_clusters=None)
         cluster.fit(triangular)
-        print("Merging any context within distance: {}".format(merge_distance))
-        print("Contexts before merging: {}".format(len(cluster.labels_)))
-        print("Clustering result merge: {}".format(cluster.labels_))
-        print("Contexts after merging: {}".format(len(np.unique(cluster.labels_))))
 
         c_labels = cluster.labels_
         uniques = np.unique(c_labels)
@@ -103,7 +99,6 @@ def roll_up_context_dict(context_dict: dict, query_threshold: int, merge_distanc
                     context = candidates[idx]
                     to_merge[context] = context_dict[context]
                     merged_dict.pop(context)
-            # TODO: If implemented using on-the-fly encoding, this should be changed as features are built
             merged = merge_context_queries(to_merge)
             merged_dict[merged.keys()] = merged[merged.keys()]
 

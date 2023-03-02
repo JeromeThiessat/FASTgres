@@ -7,14 +7,12 @@ from time import time
 
 def main():
     print("Building Query Objects v.01")
-    # adapt pahs if needed
+    # adapt paths as needed
+    # TODO: Add arguments
     path = "queries/stack/all/"
-    # path = "queries/job/"
     stack_queries = u.get_queries(path)
     save_path = "evaluation/stack/query_objects.pkl"
     save_path_time = "evaluation/stack/query_objects_encoding_time.json"
-    # save_path = "evaluation/job/query_objects.pkl"
-    # save_path_time = "evaluation/job/query_objects_encoding_time.json"
 
     query_objects = dict()
     encoding_time = dict()
