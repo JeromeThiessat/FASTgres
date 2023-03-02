@@ -154,23 +154,3 @@ cython_debug/
 # Own additions
 *.ipynb
 *.pkl
-intro_times.py
-so_pg12
-testing
-imdb_pg11.sql
-paper_plots.zip
-string_encoding_test.py
-test_context.json
-test_featurization.csv
-intro_time_dict.json
-imdb_eval_dict_old.json
-imdb_eval_dict_win.json
-imdb_eval_dict_win_old.json
-config.ini
-additions.json
-old_eval
-server_eval
-queries/stack/context_random
-queries/stack/full_random
-queries/stack/represent
-mm_dict.json
