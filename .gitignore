@@ -153,10 +153,10 @@ cython_debug/
 
 # Own additions
 *.ipynb
+*.pkl
 intro_times.py
 so_pg12
 testing
-*.pkl
 imdb_pg11.sql
 paper_plots.zip
 string_encoding_test.py
