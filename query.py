@@ -49,7 +49,13 @@ class Query:
         if len(combination_types) > 1 and 'and' not in combination_types:
             raise ValueError('Encountered unhandled combinator unequal to - and -')
 
-        for entry in self.where_part['and']:
+        # sometimes there might not be more than one where argument
+        try:
+            and_part = self.where_part['and']
+        except KeyError:
+            and_part = [self.where_part]
+        print(and_part)
+        for entry in and_part:
             alias, column, key, value = [None] * 4
             entry_keys = entry.keys()
             # handle equal keys
@@ -59,7 +65,7 @@ class Query:
                 try:
                     alias, column = equal_statement[0].split('.')
                     value = equal_statement[1]['literal']
-                except TypeError:
+                except (TypeError, ValueError):
                     # print(entry)
                     alias, column, key, value = [None] * 4
             # handle like keys
@@ -105,7 +111,7 @@ class Query:
                 try:
                     alias, column = neq_statement[0].split('.')
                     value = neq_statement[1]['literal']
-                except TypeError:
+                except (TypeError, ValueError):
                     print("Encoding issue in: {}".format(key))
                     alias, column, key, value = [None] * 4
             # handle not like keys
@@ -115,7 +121,7 @@ class Query:
                 try:
                     alias, column = not_like_statement[0].split('.')
                     value = not_like_statement[1]['literal']
-                except TypeError:
+                except (TypeError, ValueError):
                     print("Encoding issue in: {}".format(key))
                     alias, column, key, value = [None] * 4
             # handle exists keys
@@ -136,7 +142,7 @@ class Query:
                 try:
                     alias, column = in_statement[0].split('.')
                     value = in_statement[1]['literal']
-                except TypeError:
+                except (TypeError, ValueError):
                     alias, column, key, value = [None] * 4
             # handle 'missing' keys
             elif 'missing' in entry_keys:
@@ -151,7 +157,13 @@ class Query:
             elif 'gte' in entry_keys or 'lte' in entry_keys:
                 key = 'gte' if 'gte' in entry_keys else 'lte'
                 glte_statement = entry[key]
-                alias, column = glte_statement[0].split('.')
+                try:
+                    alias, column = glte_statement[0].split('.')
+                except ValueError:
+                    # no alias was used, currently unhandled
+                    # alias = None
+                    # column = glte_statement[0]
+                    pass
                 value = glte_statement[1]
             # handle as needed
             else:

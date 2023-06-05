@@ -1,5 +1,5 @@
-
 import argparse
+import itertools
 import os.path
 import time
 import numpy as np
@@ -155,6 +155,36 @@ class QueryObserver:
             if not isinstance(model, int):
                 model.cooldown -= result_time
         return prediction
+
+
+def get_combinations(to_switch_off: list):
+    temp = {1: True, 0: False}
+    bin_comb = list(itertools.product([0, 1], repeat=len(to_switch_off)))
+    bool_comb = [[temp[_[i]] for i in range(len(_))] for _ in bin_comb]
+    combinations = list()
+    for comb in bool_comb:
+        combinations.append(63 - sum(np.array(to_switch_off)[np.array(comb)]))
+    return combinations
+
+
+def get_restricted_archive(archive, to_restrict):
+    new_dict = dict()
+    covered_combinations = get_combinations(to_restrict)
+    # first fill all combinations that the current archive has
+    for query_name in archive:
+        opt_set, opt_t = 63, archive[query_name]['63']
+        new_dict[query_name] = dict()
+        for hint_set in covered_combinations:
+            try:
+                hint_set_time = archive[query_name][str(hint_set)]
+                new_dict[query_name][str(hint_set)] = hint_set_time
+                if hint_set_time < opt_t:
+                    opt_set = hint_set
+                    opt_t = hint_set_time
+            except KeyError:
+                continue
+        new_dict[query_name]['opt'] = opt_set
+    return new_dict
 
 
 def label_query(path, query, db_string):
@@ -442,10 +472,10 @@ def main():
                                                                      "overwritten.")
     parser.add_argument("-qo", "--queryobjects", default=None, help="Path to query object .pkl to shorten eval.")
     parser.add_argument("-sp", "--splitpath", default=None, help="Path to split to use (json, 'train', 'test'). "
-                                                                  "Overwrites bp.")
+                                                                 "Overwrites bp.")
     parser.add_argument("-cqd", "--querydetection", default="True", help="Whether to use CQD or not. "
-                                                                       "If False, -fp will be ignored. "
-                                                                       "Default: True")
+                                                                         "If False, -fp will be ignored. "
+                                                                         "Default: True")
     parser.add_argument("-l", "--learn", default=None, help="Path to update an existing archive or not. "
                                                             "Be sure to only use this option on the hardware your "
                                                             "archive was generated on. "
@@ -454,6 +484,7 @@ def main():
                                                                   "Defaults to 100.")
     parser.add_argument("-ed", "--estimatordepth", default=1000, help="Max depth of a single estimator. "
                                                                       "Defaults to 1000.")
+    parser.add_argument("-r", "--restrict", default=False, help="Option to restrict the label space to certain hints.")
     args = parser.parse_args()
     query_path = args.queries
 
@@ -469,6 +500,14 @@ def main():
         args_db = u.PG_IMDB
     if args_db == "stack":
         args_db = u.PG_STACK_OVERFLOW
+    elif args_db == "stack-2016":
+        args_db = u.PG_STACK_OVERFLOW_REDUCED_16
+    elif args_db == "stack-2013":
+        args_db = u.PG_STACK_OVERFLOW_REDUCED_13
+    elif args_db == "stack-2010":
+        args_db = u.PG_STACK_OVERFLOW_REDUCED_10
+    elif args_db == "tpch":
+        args_db = u.PG_TPC_H
 
     args_archive_path = args.archive
     if args_archive_path is None:
@@ -532,10 +571,25 @@ def main():
 
     print("Using absolute/percentage based timeout: {}s / {}%".format(args_a_timeout, args_p_timeout))
 
+    args_restrict = args.restrict
+    if args_restrict:
+        # name_dict = {32: 'hash',
+        #              16: 'merge',
+        #              8: 'nl',
+        #              4: 'idx-s',
+        #              2: 'seq-s',
+        #              1: 'idxo-s'}
+        # nl, hash, merge
+        hints_to_restrict_to = [8, 32, 16]
+        args_archive_restricted = get_restricted_archive(args_archive, hints_to_restrict_to)
+    else:
+        args_archive_restricted = args_archive
+
     init_predictions, final_predictions, training_time, forward_pass_time, critical_queries \
-        = evaluate_workload(query_path, args_seed, args_archive, args_label_encoders, args_mm_dict, args_wildcard_dict,
-                            args_p_timeout, args_a_timeout, args_db, args_skipped_dict, args_use_context,
-                            args_test_queries, args_query_objects, args_cqd, args_estimators, args_estimator_depth)
+        = evaluate_workload(query_path, args_seed, args_archive_restricted, args_label_encoders, args_mm_dict,
+                            args_wildcard_dict, args_p_timeout, args_a_timeout, args_db, args_skipped_dict,
+                            args_use_context, args_test_queries, args_query_objects, args_cqd, args_estimators,
+                            args_estimator_depth)
     u.save_json(init_predictions, args_save_path + "initial_predictions.json")
     u.save_pickle(training_time, args_save_path + "training_times.pkl")
     u.save_json(forward_pass_time, args_save_path + "forward_pass_times.json")
@@ -543,7 +597,9 @@ def main():
         u.save_json(final_predictions, args_save_path + "final_predictions.json")
         u.save_pickle(critical_queries, args_save_path + "critical_queries.pkl")
     if args_learn_path is not None:
-        u.save_json(args_archive, args_learn_path)
+        # currently unsupported
+        # u.save_json(args_archive, args_learn_path)
+        pass
     return
 
 

@@ -6,13 +6,12 @@ from time import time
 
 
 def main():
-    print("Building Query Objects v.01")
-    # adapt paths as needed
-    # TODO: Add arguments
-    path = "queries/stack/all/"
+    print("Building Query Objects v.02 - xy Edition")
+    path = "path/to/queries/"
     stack_queries = u.get_queries(path)
-    save_path = "evaluation/stack/query_objects.pkl"
-    save_path_time = "evaluation/stack/query_objects_encoding_time.json"
+
+    save_path = "path/to/save.pkl"
+    save_path_time = "path/to/save_timings.json"
 
     query_objects = dict()
     encoding_time = dict()

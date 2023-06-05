@@ -6,6 +6,7 @@ from scipy.cluster.hierarchy import dendrogram
 
 # for now, most of these functions are unused and for possible future work
 
+
 def merge_context_queries(context_query_dict: dict):
     new_dict = dict()
     new_context = set()

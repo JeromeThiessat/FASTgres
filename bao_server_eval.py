@@ -15,8 +15,8 @@ def chunks(lst, n):
         yield lst[i:i + n]
 
 
-def run_train_query(q):
-    conn, cur = u.establish_connection(u.PG_STACK_OVERFLOW)
+def run_train_query(q, dbi):
+    conn, cur = u.establish_connection(dbi)
     cur.execute("SET enable_bao TO ON")  # enable bao in general
     cur.execute("SET enable_bao_selection TO OFF")  # enable bao to use predicted plans
     cur.execute("SET enable_bao_rewards TO ON")  # enable bao to collect training data
@@ -36,8 +36,8 @@ def run_train_query(q):
     return
 
 
-def run_test_query(q):
-    conn, cur = u.establish_connection(u.PG_STACK_OVERFLOW)
+def run_test_query(q, dbi):
+    conn, cur = u.establish_connection(dbi)
 
     t0 = time.time()
     cur.execute("SET enable_bao TO ON")
@@ -84,16 +84,16 @@ def run_test_query(q):
     return pred, t1 + t2
 
 
-def get_query_content(queries):
+def get_query_content(queries, qp):
     read_queries = dict()
     for query in queries:
-        with open('queries/all/' + query) as f:
+        with open(qp + query) as f:
             q = f.read()
         read_queries[query] = q
     return read_queries
 
 
-def evaluate_bao(query_dict, read_queries, excluded_train_queries: list):
+def evaluate_bao(query_dict, read_queries, excluded_train_queries: list, dbi):
     seed = 29
     training_time = 0
     prediction_dict, setup_time_dict = dict(), dict()
@@ -116,7 +116,7 @@ def evaluate_bao(query_dict, read_queries, excluded_train_queries: list):
     print('Train Phase')
     for j in tqdm(train_query_range):
         train_query = train_queries[j]
-        run_train_query(read_queries[train_query])
+        run_train_query(read_queries[train_query], dbi)
         if j in retrain_chunks:
             # we also collect training times for soft comparison of model times
             print('Retraining Model...')
@@ -132,7 +132,7 @@ def evaluate_bao(query_dict, read_queries, excluded_train_queries: list):
         test_query = test_queries[j]
         # BAO predicts hints to be switched off only, thus we return a binary list that needs to be cast to an int
         # We also save prediction time as setup time that is needed to obtain a prediction
-        prediction, setup_time = run_test_query(read_queries[test_query])
+        prediction, setup_time = run_test_query(read_queries[test_query], dbi)
         prediction = u.binary_to_int(prediction)
 
         prediction_dict[test_query] = prediction
@@ -161,16 +161,33 @@ def run():
     parser.add_argument("-o", "--output", default=None, help="Output evaluation directory")
     parser.add_argument("-pt", "--process", default=None, help="path to processing time output.")
     parser.add_argument("-eq", "--excluded", default=None, help="List of queries to exclude as JSON.")
+    parser.add_argument("-qp", "--querypath", default=None, help="Path to all queries.")
+    parser.add_argument("-dbi", "--databaseinfo", default=None, help="Psycopg2 Database Info.")
 
     args = parser.parse_args()
     q_path = args.queries
     output_path = args.output
     pt_path = args.process
     excluded_train_queries_path = args.excluded
+    args_qp = args.querypath
+
+    args_db_string = args.databaseinfo
+    if args_db_string == 'imdb':
+        args_db_string = u.PG_IMDB
+    elif args_db_string == 'stack':
+        args_db_string = u.PG_STACK_OVERFLOW
+    elif args_db_string == "stack-2016":
+        args_db_string = u.PG_STACK_OVERFLOW_REDUCED_16
+    elif args_db_string == "stack-2013":
+        args_db_string = u.PG_STACK_OVERFLOW_REDUCED_13
+    elif args_db_string == "stack-2010":
+        args_db_string = u.PG_STACK_OVERFLOW_REDUCED_10
+    elif args_db_string == "tpch":
+        args_db_string = u.PG_TPC_H
 
     if output_path is None:
         raise ValueError('No output directory path provided')
-    read_queries = get_query_content(u.get_queries("queries/all/"))
+    read_queries = get_query_content(u.get_queries(args_qp), args_qp)
 
     excluded_train_queries = []
     if excluded_train_queries_path is not None:
@@ -180,7 +197,8 @@ def run():
             print("No excluded Queries found, continuing")
 
     query_dict = u.load_json(q_path)
-    prediction_dict, training_time, setup_time_dict = evaluate_bao(query_dict, read_queries, excluded_train_queries)
+    prediction_dict, training_time, setup_time_dict = evaluate_bao(query_dict, read_queries, excluded_train_queries,
+                                                                   args_db_string)
 
     # saving routine
     u.save_json(prediction_dict, output_path)

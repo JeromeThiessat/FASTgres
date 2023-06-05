@@ -22,6 +22,10 @@ cfg.read("config.ini")
 dbs = cfg["DBConnections"]
 PG_IMDB = dbs["imdb"]
 PG_STACK_OVERFLOW = dbs["stack_overflow"]
+PG_STACK_OVERFLOW_REDUCED_16 = dbs["stack_overflow_reduced_16"]
+PG_STACK_OVERFLOW_REDUCED_13 = dbs["stack_overflow_reduced_13"]
+PG_STACK_OVERFLOW_REDUCED_10 = dbs["stack_overflow_reduced_10"]
+PG_TPC_H = dbs["tpc_h"]
 
 operator_dictionary = {
     "eq": [0, 0, 1],
@@ -206,7 +210,7 @@ def build_db_min_max(db_string: str) -> dict:
             "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{}';".format(t))
         col_dict = dict()
         for column, d_type in cursor.fetchall():
-            if d_type in ['integer', 'timestamp without time zone']:
+            if d_type in ['integer', 'timestamp without time zone', 'date', 'numeric']:
                 cursor.execute("SELECT min({}), max({}) FROM {};".format(column, column, t))
                 mm_val = list(cursor.fetchall()[0])
                 col_dict[column] = mm_val
@@ -229,7 +233,7 @@ def build_label_encoders(db_string: str) -> tree:
         cursor.execute("SELECT column_name, data_type FROM information_schema.columns  WHERE table_name = '{}';"
                        .format(t))
         for column, d_type in tqdm(cursor.fetchall()):
-            if d_type == 'character varying':
+            if d_type == 'character varying' or d_type == 'character':
                 skip = False
                 if "stack_overflow" in db_string:
                     skipped_string_columns = {

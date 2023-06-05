@@ -66,7 +66,6 @@ def build_feature_dict(query: Query, db_string: str, mm_dict: dict,  label_encod
                 if column_type == "integer":
                     # some weird join in stack
                     if isinstance(filter_value, str):
-                        # print("Probably some undetected joins: {} ".format(filter_value))
                         continue
                     offset = 0.001
                     # encode min max
@@ -207,67 +206,3 @@ def build_table_column_dict(queries: list[str], query_path: str) -> dict:
                 table_column_dict[table] = columns
     return table_column_dict
 
-# TODO: useful when not encoding queries on the fly
-# def main(query_path, mm_path, label_path, db_string, wildcard_path, output_path, dbi_path, skipped_path):
-#     queries = u.get_queries(query_path)
-#     # we need 3 types of information:
-#     # integer
-#     mm_dict = u.load_json(mm_path + "mm_dict.json")
-#     # string
-#     label_encoders = u.load_pickle(label_path + "label_encoders.pkl")
-#     # wildcard
-#     wildcard_dict = u.load_json(wildcard_path + "wildcard_dict.json")
-#     # skipped columns: table -> columns | rows (count)
-#     skipped_table_columns = u.load_json(skipped_path)
-#
-#     unhandled_operators = set()
-#     unhandled_column_types = set()
-#
-#     feature_dict = u.tree()
-#     d_type_dict = u.build_db_type_dict(db_string)
-#
-#     for query_name in queries[:20]:
-#         query = Query(query_name, query_path)
-#         t0 = time.time()
-#         f_dict = build_feature_dict(query, db_string, mm_dict, label_encoders, wildcard_dict, unhandled_operators,
-#                                     unhandled_column_types, skipped_table_columns)
-#         t1 = time.time()
-#         encoded_query = encode_query(frozenset(d_type_dict.keys()), f_dict, d_type_dict)
-#         t2 = time.time()
-#         print("Query: {} took: {} to build its features and: {} to encode".format(query_name, t1-t0, t2-t1))
-#         feature_dict[query_name] = f_dict
-#     # u.save_pickle(feature_dict_single, output_path)
-#
-#     return
-
-
-# if __name__ == "__main__":
-#     print("Using featurize v0.12")
-#     parser = argparse.ArgumentParser(description="Generate featurization for input queries. This is highly specific to "
-#                                                  "the stackoverflow workload and possibly breaks with any other set of "
-#                                                  "queries")
-#     parser.add_argument("queries", default=None, help="Directory in which .sql-queries are located")
-#     parser.add_argument("-o", "--output", default=None, help="Output featurization dictionary save name")
-#     parser.add_argument("-s", "--strategy", default="first-join", help="Featurization strategy that is used")
-#     parser.add_argument("-l", "--label", default="", help="Label encoder path.")
-#     parser.add_argument("-mm", "--minmax", default="", help="MinMax dictionary path.")
-#     parser.add_argument("-w", "--wildcard", default="", help="Path to wildcard dictionary.")
-#     parser.add_argument("-db", "--database", default=u.PG_IMDB, help="Database connection string in the form of "
-#                                                                      "psycopg2.")
-#     parser.add_argument("-di", "--dinfo", default="", help="Database information path, used for db type dictionary.")
-#     parser.add_argument("-sc", "--skippedcolumns", default=None, help="Database columns to skip using preprocessing.")
-#     args = parser.parse_args()
-#
-#     args_mm = args.minmax
-#     args_label = args.label
-#     args_db_string = args.database
-#     if args_db_string == "stack":
-#         args_db_string = u.PG_STACK_OVERFLOW
-#     if args_db_string == "imdb":
-#         args_db_string = u.PG_IMDB
-#     args_wildcard = args.wildcard
-#     args_output = args.output
-#     args_type_path = args.dinfo
-#     args_skip = args.skippedcolumns
-#
-#     main(args.queries, args_mm, args_label, args_db_string, args_wildcard, args_output, args_type_path, args_skip)

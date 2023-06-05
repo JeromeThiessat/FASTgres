@@ -66,7 +66,8 @@ def main(minmax_path, db_string, overwrite, label_path, wildcard_path, queries, 
                 for column in query.attributes[table]:
                     for operator in query.attributes[table][column]:
                         if (operator == "like" or operator == "ilike") \
-                                and db_type_dict[table][column] == "character varying":
+                                and db_type_dict[table][column] == "character varying" \
+                                or db_type_dict[table][column] == "character":
 
                             filter_attribute = query.attributes[table][column][operator]
                             # check if we would overwrite an entry beforehand
@@ -108,6 +109,14 @@ if __name__ == "__main__":
         args_db_string = u.PG_IMDB
     elif args_db_string == 'stack':
         args_db_string = u.PG_STACK_OVERFLOW
+    elif args_db_string == "stack-2016":
+        args_db_string = u.PG_STACK_OVERFLOW_REDUCED_16
+    elif args_db_string == "stack-2013":
+        args_db_string = u.PG_STACK_OVERFLOW_REDUCED_13
+    elif args_db_string == "stack-2010":
+        args_db_string = u.PG_STACK_OVERFLOW_REDUCED_10
+    elif args_db_string == "tpch":
+        args_db_string = u.PG_TPC_H
     args_mm = args.minmax
     args_label = args.label
     args_wildcard = args.wildcard
