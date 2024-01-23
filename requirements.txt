@@ -1,0 +1,11 @@
+mo_sql_parsing==9.443.23275
+numpy==1.26.3
+pandas==2.1.4
+pika==1.3.2
+psycopg2==2.9.9
+scikit_learn==1.3.2
+tqdm==4.66.1
+
+scikit-learn~=1.3.2
+joblib~=1.3.2
+matplotlib~=3.8.2

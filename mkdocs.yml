@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+site_name: FASTgres Documentation
+site_url: https://fastgresdoc.com/
+nav:
+  - Home: index.md
+  - About: about.md
+  - Documentation: documentation.md
+  - User Guide: user_guide.md
+
+theme: material
+markdown_extensions:
+  - footnotes

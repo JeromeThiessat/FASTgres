@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastgres"
+version = "0.0.2"
+authors = [{ name = "Jerome Thiessat", email = "jerome.thiessat@tu-dresden.de" }]
+description = "FASTgres is a learned model for query compiler hinting"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 1 - Alpha",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mo-sql-parsing",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "psycopg2",
+    "scipy"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/db-tu-dresden/FASTgres-PVLDBv16"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fastgres*"]
+exclude = ["fastgres/baseline/evaluate_workload.py", "fastgres/testing*"]
