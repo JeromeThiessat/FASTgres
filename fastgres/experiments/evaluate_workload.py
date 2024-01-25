@@ -136,7 +136,7 @@ def run_workload():
     params = EvaluationParameter(eval_type, config_path)
 
     workload = Workload(params.workload_path, params.workload_name)
-    workload.load_queries()
+    _ = workload.queries
 
     database_connection = DatabaseConnection(params.db_config, params.db_name)
 

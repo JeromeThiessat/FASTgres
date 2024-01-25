@@ -154,3 +154,6 @@ cython_debug/
 # Own additions
 *.ipynb
 *.pkl
+fastgres/archives/**/.json
+fastgres/logs/*.log
+fastgres/logs/*.pstat

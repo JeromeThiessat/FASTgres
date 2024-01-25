@@ -22,6 +22,9 @@ class Workload:
             query = file.read()
         return query
 
+    def read_queries(self):
+        return [self.read_query(query_name) for query_name in self.queries]
+
     def _get_queries(self):
         queries = list()
         for file in tqdm(os.scandir(self.path), desc="Loading Queries"):

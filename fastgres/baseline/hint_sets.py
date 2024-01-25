@@ -1,18 +1,20 @@
+import enum
+
 
 def set_hints(hint_set, cursor):
     for i in range(hint_set.hint_set_size):
         name = hint_set.get_name(i)
         value = hint_set.get(i)
-        statement = f'set {name}={value};'
-        cursor.execute(statement)
+        # statement = f'set {name}={value};'
+        cursor.execute(f'set {name}={value};')
     return hint_set
 
 
 def show_hint_status(cursor):
     operators = HintSet.operators
     for i in operators:
-        statement = 'show {};'.format(i)
-        cursor.execute(statement)
+        # statement = 'show {};'.format(i)
+        cursor.execute('show {};'.format(i))
         res = cursor.fetchall()[0][0]
         print('{} is set to "{}"'.format(i, res))
     print('\n')
@@ -22,14 +24,33 @@ def show_hint_status(cursor):
 def reset_hints(cursor):
     reset_operators = HintSet.operators
     for operator in reset_operators:
-        statement = 'set ' + operator + '=true;'
-        cursor.execute(statement)
+        # statement = 'set ' + operator + '=true;'
+        cursor.execute(f"set {operator}=true;")
     return
+
+
+class Hint(enum.Enum):
+    HASH_JOIN = 32
+    MERGE_JOIN = 16
+    NESTED_LOOP_JOIN = 8
+    INDEX_SCAN = 4
+    SEQ_SCAN = 2
+    INDEX_ONLY_SCAN = 1
+
+
+class PostgresOperator(enum.Enum):
+    HASH_JOIN = "enable_hashjoin"
+    MERGE_JOIN = "enable_mergejoin"
+    NESTED_LOOP_JOIN = "enable_nestloop"
+    INDEX_SCAN = "enable_indexscan"
+    SEQ_SCAN = "enable_seqscan"
+    INDEX_ONLY_SCAN = "enable_indexonlyscan"
 
 
 class HintSet:
     operators = ['enable_hashjoin', 'enable_mergejoin', 'enable_nestloop', 'enable_indexscan', 'enable_seqscan',
                  'enable_indexonlyscan']
+    # operators = [operator.value for operator in PostgresOperator]
 
     def __init__(self, default: int = None):
         self.hash_join = True

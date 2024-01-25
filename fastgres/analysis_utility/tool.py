@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap
 
-from baseline.utility import load_json
-from workloads.workload import Workload
+from fastgres.baseline.utility import load_json
+from fastgres.workloads.workload import Workload
 
 
 class TimeGranularity(enum.Enum):
@@ -157,6 +157,9 @@ def get_pseudo_labeled_dict(archive: dict) -> dict:
     pseudo_dict = dict()
     for query_name in missing_values:
         pseudo_dict[query_name] = archive[query_name] | missing_values[query_name]
+        print(pseudo_dict[query_name])
+    if not pseudo_dict:
+        return archive
     return pseudo_dict
 
 
