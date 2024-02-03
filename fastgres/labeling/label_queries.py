@@ -55,6 +55,8 @@ class Labeling:
                 # logger.info('Evaluating Query')
                 hint_set = HintSet(hint_set_int)
                 query_hint_time = self.dbc.evaluate_hinted_query(query, hint_set, timeout)
+                # sanity check for extremely fast queries that are returned with runtimes around zero
+                query_hint_time = 0.001 if query_hint_time <= 0.001 else query_hint_time
 
             if query_hint_time is None:
                 # timed out queries can not be counted

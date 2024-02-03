@@ -2,10 +2,13 @@ import abc
 import enum
 import itertools
 import os
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+import warnings
 from matplotlib.colors import ListedColormap
+from copy import deepcopy
 
 from fastgres.baseline.utility import load_json
 from fastgres.workloads.workload import Workload
@@ -17,19 +20,37 @@ class TimeGranularity(enum.Enum):
     HOURS = "h"
 
 
-def set_fonts(size):
-    # https://stackoverflow.com/a/14971193
-    plt.rc('font', size=size)
-    plt.rc('axes', titlesize=size)
-    plt.rc('axes', labelsize=size)
-    plt.rc('xtick', labelsize=size)
-    plt.rc('ytick', labelsize=size)
-    plt.rc('legend', fontsize=size)
-    plt.rc('figure', titlesize=size)
+class FontParameter(enum.Enum):
+    FONT = "font.size"
+    AXES_TITLE = "axes.titlesize"
+    AXES_LABEL = "axes.labelsize"
+    X_TICK_LABEL = "xtick.labelsize"
+    Y_TICK_LABEL = "ytick.labelsize"
+    LEGEND_FONT = "legend.fontsize"
+    FIGURE_TITLE = "figure.titlesize"
 
 
-def resent_fonts():
-    set_fonts(10)
+def default_fonts(size):
+    return {i: size for i in FontParameter}
+
+
+def font(font_params: dict[FontParameter, int]):
+    def decorator(f):
+        def inner(*args, **kwargs):
+            with plt.rc_context({fp.value: size for fp, size in font_params.items()}):
+                result = f(*args, **kwargs)
+            return result
+        return inner
+    return decorator
+
+    # # https://stackoverflow.com/a/14971193
+    # plt.rc('font', size=size)
+    # plt.rc('axes', titlesize=size)
+    # plt.rc('axes', labelsize=size)
+    # plt.rc('xtick', labelsize=size)
+    # plt.rc('ytick', labelsize=size)
+    # plt.rc('legend', fontsize=size)
+    # plt.rc('figure', titlesize=size)
 
 
 def get_rgb_colors():
@@ -46,7 +67,7 @@ def get_rgb_colors():
     ]
 
 
-def get_colormap() -> dict[int, ListedColormap]:
+def get_colormap() -> dict[int, tuple[float, float, float, float]]:
     rgb_colors = get_rgb_colors()
     colors = ListedColormap(rgb_colors)
     color_map = {i: colors(i) for i in range(len(rgb_colors))}
@@ -122,7 +143,86 @@ def get_combinations_of_order(order: list[int]) -> list[list[int]]:
     return all_combinations
 
 
-def get_pseudo_labeled_dict(archive: dict) -> dict:
+def get_reduced_archive(archive: dict, flexible_hints: list[int], number_of_hints: int = 6) -> dict:
+    """
+    This function reduces a given archive to match a fixed amounts of used hints. This should only be used if
+    :param archive: archive to reduce from
+    :param flexible_hints: hints used in reduction, i.e., the flexible ones
+    :param number_of_hints: overall amount of hints, i.e., flexible and rigid hints
+    :return: archive containing only flexible hint set combinations
+    """
+    reduced = {key: dict() for key in archive}
+    combinations = get_hint_set_combinations(flexible_hints, number_of_hints)
+    # for query_name in reduced:
+    #     reduced[query_name] = {hint_set: archive[query_name][str(hint_set)] for hint_set in combinations}
+    #     reduced["opt"] = archive[query_name]["opt"] if int(archive[query_name]["opt"]) in combinations else
+    for query_name in archive:
+        opt_set, opt_t = 63, archive[query_name]['63']
+        old_opt = int(archive[query_name]['opt'])
+        for hint_set in combinations:
+            try:
+                hint_set_time = archive[query_name][str(hint_set)]
+                reduced[query_name][str(hint_set)] = hint_set_time
+                if hint_set_time < opt_t:
+                    opt_set = hint_set
+                    opt_t = hint_set_time
+            except KeyError:
+                continue
+        reduced[query_name]['opt'] = opt_set if old_opt not in combinations else str(old_opt)
+
+    return reduced
+
+
+def get_hint_set_reduced_archive(archive: dict, hint_sets_to_use: list[int]) -> dict:
+    """
+    This function reduces a given archive to match a fixed amounts of used hints. This should only be used if
+    :param archive: archive to reduce from
+    :param hint_sets_to_use: hint sets to reduce to
+    :return: archive containing only flexible hint set combinations
+    """
+    reduced = {key: dict() for key in archive}
+    for query_name in archive:
+        opt_set, opt_t = 63, archive[query_name]['63']
+        old_opt = int(archive[query_name]['opt'])
+        for hint_set in hint_sets_to_use:
+            try:
+                hint_set_time = archive[query_name][str(hint_set)]
+                reduced[query_name][str(hint_set)] = hint_set_time
+                if hint_set_time < opt_t:
+                    opt_set = hint_set
+                    opt_t = hint_set_time
+            except KeyError:
+                continue
+        reduced[query_name]['opt'] = opt_set if old_opt not in hint_sets_to_use else str(old_opt)
+    return reduced
+
+
+def sanity_check_archive(archive: dict, threshold: float = 0.001) -> [dict, bool]:
+    """
+    Performs sanity checks on labeled archives such that no floating point errors in time measurement remain,
+    causing issues when calculating with runtimes of e.g., 0.0
+    :param archive: input archive to check
+    :param threshold: threshold to consider while checking
+    :return: cleaned archive and boolean if cleaning was performed
+    """
+    cleaned_dict = dict()
+    cleaned = False
+    for query_name in archive:
+        new_dict = dict()
+        for key in archive[query_name]:
+            # except opt from checks
+            if key == 'opt':
+                continue
+            time = float(archive[query_name][key])
+            if time <= threshold:
+                cleaned = True
+                new_dict[key] = threshold
+        # overwrite erroneous entries
+        cleaned_dict[query_name] = archive[query_name] | new_dict
+    return cleaned_dict, cleaned
+
+
+def get_pseudo_labeled_dict(archive: dict, interpolate_default: bool = False) -> dict:
     """
     This function builds a pseudo-complete labeling dict. As full labeling is infeasible especially for large amounts
     of hints, we can use the aggressive timeout strategy that was used to determine an optimistic solution. This pseudo
@@ -130,36 +230,29 @@ def get_pseudo_labeled_dict(archive: dict) -> dict:
     interrupted query being just a little slower than the set timeout. We can use this pseudo-complete dictionary to
     get a query performance estimation without having to relabel each time there would be a missing value. However,
     this dictionary should not be used to measure performance as it does not reflect proper times for missing
-    query-hint-set combinations.
+    query-hint-set combinations. Currently only supports 6 hints.
+    :param interpolate_default: Switch to interpolate using pg default values
     :param archive: true but incomplete labeled data
     :return: pseudo-complete dictionary
     """
-    missing_values = dict()
-    for query_name in archive.keys():
-        # this hint is always labeled as it is the postgres default
+    pseudo_dict = deepcopy(archive)
+    faulty_entries = 0
+    for query_name in archive:
+        pg_def = archive[query_name]["63"]
         current_best_time = archive[query_name]["63"]
         for int_idx in reversed(range(63)):
             try:
                 query_time = archive[query_name][str(int_idx)]
                 if query_time < current_best_time:
                     current_best_time = query_time
-            except KeyError:
-                # this means the query got timed out during labeling
-                # it minimally took the previous best time for it to run
-                # TODO: add a small offset as overhead to avoid confusion in later evaluation if needed
-                query_time = current_best_time
-                try:
-                    missing_values[query_name]
-                except KeyError:
-                    missing_values[query_name] = dict()
-                missing_values[query_name][str(int_idx)] = query_time
-    # lastly merge with missing values
-    pseudo_dict = dict()
-    for query_name in missing_values:
-        pseudo_dict[query_name] = archive[query_name] | missing_values[query_name]
-        print(pseudo_dict[query_name])
-    if not pseudo_dict:
-        return archive
+            except (KeyError, ValueError):
+                query_time = current_best_time if not interpolate_default else pg_def
+                query_time = 0.001 if query_time <= 0.001 else query_time
+                pseudo_dict[query_name][str(int_idx)] = query_time
+            if query_time < pseudo_dict[query_name][str(pseudo_dict[query_name]["opt"])]:
+                faulty_entries += 1
+    if faulty_entries > 0:
+        warnings.warn(f"Archive contained: {faulty_entries} faulty entries")
     return pseudo_dict
 
 
@@ -215,14 +308,25 @@ def get_labeling_time_of_combination(combination: list[int], archive: dict, quer
     return labeling_time
 
 
+def get_order_hint_sets(hint_sets: list[int], sub: bool=True) -> list[int]:
+    order = list()
+    for i in range(1, len(hint_sets)):
+        if sub:
+            order.append(hint_sets[i-1] - hint_sets[i])
+        else:
+            order.append(hint_sets[i] - hint_sets[i-1])
+    return order
+
+
 class Tool(abc.ABC):
 
-    def __init__(self, archive_path: str, workload_path: str):
+    def __init__(self, archive_path: str, workload_path: str, sanity_check: bool = True):
         self._archive_path = archive_path
         self._archive = None
         self._workload_path = workload_path
         self._workload = None
-        self._queries = None
+        self._workload_queries = None
+        self._sanity_check = sanity_check
 
     @property
     def archive(self):
@@ -230,6 +334,10 @@ class Tool(abc.ABC):
             raise ValueError("Archive path: {} does not exist.")
         if self._archive is None:
             self._archive = load_json(self._archive_path)
+            if self._sanity_check:
+                self._archive, cleaned = sanity_check_archive(self._archive)
+                if cleaned:
+                    warnings.warn("Input archive contained erroneous entries and was cleaned")
         return self._archive
 
     @property
@@ -242,12 +350,12 @@ class Tool(abc.ABC):
 
     @property
     def queries(self):
-        if self._queries is None:
-            self._queries = self.workload.queries
-        return self._queries
+        if self._workload_queries is None:
+            self._workload_queries = self.workload.queries
+        return self._workload_queries
 
-    def print_results(self):
-        raise NotImplementedError
+    # def print_results(self):
+    #     raise NotImplementedError
 
     def plot(self):
         raise NotImplementedError

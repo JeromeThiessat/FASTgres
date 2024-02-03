@@ -10,7 +10,8 @@ from fastgres.analysis_utility.tool import TimeGranularity as Tg
 class SingleHintOptimizationInfluence(Tool):
 
     def __init__(self, archive_path: str, query_path: str, query_names: list[str], hint_set_order: list[int],
-                 time_granularity: Tg = Tg.SECONDS, use_pseudo_dict: bool = True):
+                 time_granularity: Tg = Tg.SECONDS, use_pseudo_dict: bool = True, plot_labeling_time: bool = False,
+                 plot_diff: bool = True):
         super().__init__(archive_path, query_path)
         # queries to evaluate not workload.queries (all queries)
         self._query_names = query_names
@@ -21,10 +22,21 @@ class SingleHintOptimizationInfluence(Tool):
         self.time_granularity = time_granularity
         self.properties = None
         self._plot = None
+        self._plot_labeling = plot_labeling_time
+        self._plot_diff = plot_diff
         if use_pseudo_dict:
             self._used_dict = tool.get_pseudo_labeled_dict(self.archive)
         else:
             self._used_dict = self.archive
+
+    @property
+    def plot_labeling(self):
+        return self._plot_labeling
+
+    @plot_labeling.setter
+    def plot_labeling(self, plot_labels: bool):
+        self._plot_labeling = plot_labels
+        self._plot = None
 
     @property
     def time_granularity(self):
@@ -33,11 +45,11 @@ class SingleHintOptimizationInfluence(Tool):
     @time_granularity.setter
     def time_granularity(self, new_granularity: Tg):
         self._time_granularity = new_granularity
-        if self.time_granularity == Tg.SECONDS:
+        if self._time_granularity == Tg.SECONDS:
             self._time_factor = 1.0
-        elif self.time_granularity == Tg.MINUTES:
+        elif self._time_granularity == Tg.MINUTES:
             self._time_factor = 60.0
-        elif self.time_granularity == Tg.HOURS:
+        elif self._time_granularity == Tg.HOURS:
             self._time_factor = 3600.0
         # invalidate current plot
         self._plot = None
@@ -85,16 +97,11 @@ class SingleHintOptimizationInfluence(Tool):
             # time it would have taken to label this combination
             labeling_time = np.divide(
                 np.sum([tool.get_labeling_time_of_combination(combination, self._used_dict, query_name)
-                        for query_name in self.query_names]),
-                self._time_factor)
+                        for query_name in self.query_names]), self._time_factor)
             # use the result dict as reference as under restricted hint flexibility, we obtain new optimal hint sets
-            optimal_time = np.divide(
-                np.sum(tool.get_opt(result_dict, self.query_names)),
-                self._time_factor)
+            optimal_time = np.divide(np.sum(tool.get_opt(result_dict, self.query_names)), self._time_factor)
             # default time stays the same
-            default_time = np.divide(
-                np.sum(tool.get_baseline(self.archive, self.query_names)),
-                self._time_factor)
+            default_time = np.divide(np.sum(tool.get_baseline(self.archive, self.query_names)), self._time_factor)
             labeling_times.append(labeling_time)
             optimal_times.append(optimal_time)
             default_times.append(default_time)
@@ -104,19 +111,12 @@ class SingleHintOptimizationInfluence(Tool):
             "default_times": np.array(default_times)
         }
 
-    # def _calculate_results(self) -> list[dict[str, list[float]]]:
-    #     results = list()
-    #     for hint_set_order in self.hint_set_orders:
-    #         results.append(self._calculate_result(hint_set_order))
-    #     return results
-
     def set_properties(self, **kwargs):
         self.properties = kwargs
 
     def _apply_properties(self):
         if self.properties is None:
             return
-
         title_left = self.properties.get("title_left", None)
         title_right = self.properties.get("title_right", None)
         y_label_left = self.properties.get("ylabel_left", None)
@@ -125,16 +125,22 @@ class SingleHintOptimizationInfluence(Tool):
         y_ticks_right = self.properties.get("yticks_right", None)
         y_lim_left = self.properties.get("ylim_left", None)
         y_lim_right = self.properties.get("ylim_right", None)
-        _, axs = self.plot
-        speedup_ax, labeling_ax = axs
-        if title_left is not None: speedup_ax.set_title(title_left)
-        if title_right is not None: labeling_ax.set_title(title_right)
-        if y_label_left is not None: speedup_ax.set_ylabel(y_label_left)
-        if y_label_right is not None: labeling_ax.set_ylabel(y_label_right + f" [{self.time_granularity.value}]")
-        if y_ticks_left is not None: speedup_ax.set_yticks(y_ticks_left)
-        if y_ticks_right is not None: labeling_ax.set_yticks(y_ticks_right)
-        if y_lim_left is not None: speedup_ax.set_ylim(y_lim_left)
-        if y_lim_right is not None: labeling_ax.set_ylim(y_lim_right)
+        _, ax = self.plot
+        if self.plot_labeling:
+            speedup_ax, labeling_ax = ax
+            if title_right is not None: labeling_ax.set_title(title_right)
+            if y_label_right is not None: labeling_ax.set_ylabel(y_label_right + f" [{self.time_granularity.value}]")
+            if y_ticks_right is not None: labeling_ax.set_yticks(y_ticks_right)
+            if y_lim_right is not None: labeling_ax.set_ylim(y_lim_right)
+            if title_left is not None: speedup_ax.set_title(title_left)
+            if y_label_left is not None: speedup_ax.set_ylabel(y_label_left)
+            if y_ticks_left is not None: speedup_ax.set_yticks(y_ticks_left)
+            if y_lim_left is not None: speedup_ax.set_ylim(y_lim_left)
+        else:
+            if title_left is not None: ax.set_title(title_left)
+            if y_label_left is not None: ax.set_ylabel(y_label_left)
+            if y_ticks_left is not None: ax.set_yticks(y_ticks_left)
+            if y_lim_left is not None: ax.set_ylim(y_lim_left)
 
     @staticmethod
     def _get_names(hint_set_order: list[int]):
@@ -151,14 +157,23 @@ class SingleHintOptimizationInfluence(Tool):
     def set_bar_text(self, bar, ax=None):
         if ax is None:
             _, ax = self.plot
+        old_h = 1.0
+        height_factor = .5
         for rect in bar:
             height = rect.get_height()
             ax.text(rect.get_x() + rect.get_width() / 2.0,
-                    height / 2,
-                    '%.2f' % round(height, 2),
+                    height * height_factor,
+                    '%.3f' % round(height, 3),
                     ha='center',
                     va='bottom')
-            # ax.text(i, y=display_time / 2, s=int(round(display_time, 1)), ha="center", va="center", c="white")
+            if self._plot_diff:
+                ax.text(rect.get_x() + rect.get_width() / 2.0,
+                        height * height_factor + min(0.15, height * 1.3),
+                        '%.3f' % round(height - old_h, 3),
+                        ha='center',
+                        va='bottom',
+                        color="darkgreen")
+            old_h = height
         return
 
     def print_results(self):
@@ -177,23 +192,32 @@ class SingleHintOptimizationInfluence(Tool):
         labeling_times = self.results["labeling_times"]
         # labeling_time_differences = np.ediff1d(labeling_times, to_begin=labeling_times[0])
 
-        self._plot = plt.subplots(figsize=(16, 6), ncols=2)
+        if self.plot_labeling:
+            # self._plot = plt.subplots(figsize=(16, 6), ncols=2)
+            self._plot = plt.subplots(figsize=(20, 6), ncols=2)
 
-        _, axs = self._plot
-        ax_speedup, ax_labeling_time = axs
-        bar_speedup = ax_speedup.bar(x_values, y_values)
-        bar_labeling = ax_labeling_time.bar(x_values, labeling_times)
+            _, axs = self._plot
+            ax_speedup, ax_labeling_time = axs
+            bar_speedup = ax_speedup.bar(x_values, y_values, color=tool.get_i_rgb_colors(1))
+            bar_labeling = ax_labeling_time.bar(x_values, labeling_times, color=tool.get_i_rgb_colors(2)[1])
 
-        tick_names = self._get_names(self.hint_set_order)
-        ax_speedup.set_xticks(x_values, tick_names, rotation=-45)
-        ax_labeling_time.set_xticks(x_values, tick_names, rotation=-45)
+            tick_names = self._get_names(self.hint_set_order)
+            ax_speedup.set_xticks(x_values, tick_names, rotation=-45)
+            ax_labeling_time.set_xticks(x_values, tick_names, rotation=-45)
 
-        # self.set_bar_text(bar_speedup, ax_speedup)
-        # self.set_bar_text(bar_labeling, ax_speedup)
-        tool.set_fonts(22)
+            self.set_bar_text(bar_speedup, ax_speedup)
+            self.set_bar_text(bar_labeling, ax_labeling_time)
+        else:
+            self._plot = plt.subplots(figsize=(10, 6))
+            _, ax = self._plot
+            bar_speedup = ax.bar(x_values, y_values, color=tool.get_i_rgb_colors(1))
+            tick_names = self._get_names(self.hint_set_order)
+            ax.set_xticks(x_values, tick_names, rotation=-45)
+            self.set_bar_text(bar_speedup, ax)
 
         return self._plot
 
+    @tool.font(tool.default_fonts(21))
     def show(self):
         fig, _ = self.plot
         self._apply_properties()
@@ -201,6 +225,7 @@ class SingleHintOptimizationInfluence(Tool):
         plt.show()
         self._plot = None
 
+    @tool.font(tool.default_fonts(21))
     def save_results(self, path: str, dpi: int = 600):
         matplotlib.rcParams['pdf.use14corefonts'] = True
         fig, _ = self.plot

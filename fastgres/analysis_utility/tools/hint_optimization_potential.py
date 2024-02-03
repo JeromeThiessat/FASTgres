@@ -13,7 +13,7 @@ class HintOptimizationPotential(Tool):
     def __init__(self, archive_path: str, query_path: str,
                  time_granularity: Tg = Tg.SECONDS):
         super().__init__(archive_path, query_path)
-        tool.set_fonts(16)
+        # tool.set_fonts(16)
         self._x = ["PG Default", "Opt"]
         self._y = None
         self._plot = None
@@ -96,12 +96,14 @@ class HintOptimizationPotential(Tool):
         if x_lim is not None: ax.set_xlim(x_lim)
         if y_lim is not None: ax.set_ylim(y_lim)
 
+    @tool.font(tool.default_fonts(16))
     def show(self):
         fig, _ = self.plot
         self._apply_properties()
         plt.show()
         self._plot = None
 
+    @tool.font(tool.default_fonts(16))
     def save_results(self, path: str, dpi: int = 600):
         matplotlib.rcParams['pdf.use14corefonts'] = True
         fig, _ = self.plot

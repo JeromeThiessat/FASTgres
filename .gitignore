@@ -152,8 +152,11 @@ cython_debug/
 #.idea/
 
 # Own additions
-*.ipynb
 *.pkl
 fastgres/archives/**/.json
 fastgres/logs/*.log
 fastgres/logs/*.pstat
+figures/
+pre_split_queries/
+Digraph.gv
+Digraph.gv.pdf

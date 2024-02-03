@@ -82,7 +82,7 @@ class DatabaseConnection:
         statement += self._get_hint_statements(hint_set)
         if timeout is not None:
             if timeout <= 0.0:
-                timeout = 0.01
+                timeout = 0.001
             statement += f"SET LOCAL statement_timeout = '{round(timeout, 4)}s';\n"
         return statement
 
