@@ -1,4 +1,4 @@
-
+import matplotlib
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 from fastgres.analysis_utility.tools.hint_set_order import HintSetOrder as HsO
 from fastgres.analysis_utility import tool
 from fastgres.baseline.hint_sets import Hint
+from fastgres.baseline.utility import int_to_binary, get_first_mismatch
 
 
 class QueryOrderTraversal(HsO):
@@ -15,6 +16,17 @@ class QueryOrderTraversal(HsO):
                  use_pseudo_dict: bool = True, op_mode: HsO.OperationMode = HsO.OperationMode.SUB):
         super().__init__(archive_path, query_path, query_names, hints, op_mode=op_mode, use_pseudo_dict=use_pseudo_dict)
         self._query_results = None
+
+    #     self._reduced = True
+    #
+    # @property
+    # def reduced(self):
+    #     return self._reduced
+    #
+    # @reduced.setter
+    # def reduced(self, new_val: bool):
+    #     self._reduced = new_val
+    #     self._query_results = None
 
     @property
     def query_results(self):
@@ -29,11 +41,11 @@ class QueryOrderTraversal(HsO):
         top_k_res = self.get_top_k_results()
         orders = top_k_res["orders"]
         # including 63 and 0
-        order_dict = {i: set() for i in range(len(self.hints)+1)}
+        order_dict = {i: set() for i in range(len(self.hints) + 1)}
         edges = set()
         for order in orders:
             edges = edges.union(self.edges_from_order(order))
-            for i in range(len(self.hints)+1):
+            for i in range(len(self.hints) + 1):
                 order_dict[i].add(order[i])
         # print("Order Dict:", order_dict)
         # print("Edges: ", edges)
@@ -41,9 +53,9 @@ class QueryOrderTraversal(HsO):
         for level in order_dict:
             result_dict[level] = dict()
             for hint_set in order_dict[level]:
-                run_time = sum([self._used_dict[query_name][str(hint_set)] for query_name in queries_to_use])
-                default_time = sum([self._used_dict[query_name]["63"] for query_name in queries_to_use])
-                result_dict[level][str(hint_set)] = round(default_time/run_time, 1)
+                run_time = sum([self.used_dict[query_name][str(hint_set)] for query_name in queries_to_use])
+                default_time = sum([self.used_dict[query_name]["63"] for query_name in queries_to_use])
+                result_dict[level][str(hint_set)] = round(default_time / run_time, 1)
         result_dict["edges"] = edges
         return result_dict
 
@@ -54,7 +66,7 @@ class QueryOrderTraversal(HsO):
         res = self.calculate_reduced_result()
         max_order = list()
         edges = res["edges"]
-        for level_idx in range(len(self.hints)+1):
+        for level_idx in range(len(self.hints) + 1):
             level_hint_sets = res[level_idx]
             hint_sets, speedups = list(level_hint_sets.keys()), list(level_hint_sets.values())
             sorted_sets = sorted(zip(hint_sets, speedups), key=lambda x: x[1], reverse=True)
@@ -65,38 +77,86 @@ class QueryOrderTraversal(HsO):
                     break
         return max_order
 
-    def get_evaluated_hint_sets(self, query_name: str, order: tuple, early_stopping: bool = False):
-        self.calculate_one_ring_of_order()
+    def get_evaluated_hint_sets(self, order: tuple):
+        hint_order = tool.get_order_from_hint_sets(list(order))
+        return self.calculate_one_ring_of_order([Hint(i) for i in hint_order])
 
     def get_best_of_order(self, query_name: str, order: tuple, early_stopping: bool = False):
         if early_stopping:
-            current_best, current_best_time = order[0], self._used_dict[query_name][str(order[0])]
+            current_best, current_best_time = order[0], self.used_dict[query_name][str(order[0])]
             for i in range(1, len(order)):
-                new_set, new_t = order[i], self._used_dict[query_name][str(order[i])]
+                new_set, new_t = order[i], self.used_dict[query_name][str(order[i])]
                 if new_t < current_best_time:
                     current_best = new_set
+                    current_best_time = new_t
                 else:
+                    # break as we stop once we have no time decrease
                     break
             return current_best, current_best_time
         else:
-            sorted_list = sorted([(order[i], self._used_dict[query_name][str(order[i])]) for i in range(len(order))],
+            sorted_list = sorted([(order[i], self.used_dict[query_name][str(order[i])]) for i in range(len(order))],
                                  key=lambda x: x[1])
             sorted_sets = [_[0] for _ in sorted_list]
             sorted_time = [_[1] for _ in sorted_list]
             return sorted_sets[0], sorted_time[0]
 
-    @property
-    def plot(self):
-        if self._plot is not None:
-            return self._plot
+    def draw_default(self, order: list[int], ax, break_level: int = None):
+        edges = set()
+        default = 2**len(self.hints)-1
+        pos = {default: np.array([round((len(self.hints)-1)/2, 1), 0]),
+               str(default): np.array([round((len(self.hints)-1)/2, 1), 0])}
+        graph = nx.DiGraph()
+        labels = {default: f"{str(default)}\n(1.0)", f"{default}": f"{str(default)}\n(1.0)"}
+        order = [default] + order + [0]
+        for level_idx in range(len(order)):
+            last_order_item = order[level_idx]
+            int_list_last_order = int_to_binary(last_order_item, len(self.hints))
+            one_ring = self.calculate_one_ring(last_order_item)
+            for i in range(len(one_ring)):
+                hint_set = one_ring[i]
 
+                hint_set_int_list = int_to_binary(hint_set, len(self.hints))
+                index = get_first_mismatch(int_list_last_order, hint_set_int_list)
+
+                speedup = np.round(
+                    tool.get_speedup(
+                        tool.get_baseline(self.used_dict, self.query_names),
+                        np.array([self.used_dict[q_name][str(hint_set)] for q_name in self.query_names])
+                    ), 1)[0]
+                # mean = round(len(one_ring) / 2, 1)
+                # pos[hint_set] = np.array([i - mean, -level_idx])
+                # pos[str(hint_set)] = np.array([i - mean, -level_idx])
+                pos[hint_set] = np.array([index, -level_idx])
+                pos[str(hint_set)] = np.array([index, -level_idx])
+                labels[hint_set] = f"{hint_set}\n({speedup})"
+                labels[str(hint_set)] = f"{hint_set}\n({speedup})"
+                edges.add((last_order_item, hint_set))
+                # graph.add_node(hint_set, pos=(i - mean, -level_idx))
+                graph.add_node(hint_set, pos=(index, -level_idx))
+
+            if break_level is not None and level_idx >= break_level:
+                break
+        # print(edges)
+        # print(pos)
+        top_order_edges = self.edges_from_order(tuple(order))
+        self._draw_variables = dict()
+        self._draw_variables["edges"] = edges
+        self._draw_variables["top_order_edges"] = top_order_edges
+        self._draw_variables["pos"] = pos
+        self._draw_variables["labels"] = labels
+        self._draw_variables["graph"] = graph
+        return self.draw_graph(ax)
+
+    def draw_reduced(self, ax):
         res = self.calculate_reduced_result()
-        fig, ax = plt.subplots()
+        max_order = self.get_max_order()
+        print(max_order)
+        # fig, ax = plt.subplots()
         graph = nx.DiGraph()
         pos = dict()
         labels = dict()
         edges = res["edges"]
-        for level_idx in range(len(self.hints)+1):
+        for level_idx in range(len(self.hints) + 1):
             level_hint_sets = res[level_idx]
             hint_sets, speedups = list(level_hint_sets.keys()), list(level_hint_sets.values())
             for i in range(len(hint_sets)):
@@ -110,29 +170,22 @@ class QueryOrderTraversal(HsO):
                 pos[hint_set] = np.array([i - mean, -level_idx])
                 pos[str(hint_set)] = np.array([i - mean, -level_idx])
 
-        max_order = self.get_max_order()
         top_order_edges = self.edges_from_order(tuple(max_order))
-        for edge in edges:
-            if edge in top_order_edges:
-                color = "#009900"
-                pen_width = 1.6
-            else:
-                color = "#000000"
-                pen_width = 0.8
-            graph.add_edge(str(edge[0]), str(edge[1]), color=color, weight=pen_width)
 
-        colors = [graph[u][v]['color'] for u, v in graph.edges()]
-        color_map = ['w' for _ in graph]
-        # labels = [str(node) for node in graph]
-        weights = [float(graph[u][v]['weight']) for u, v in graph.edges()]
-        nx.draw_networkx_nodes(graph, pos=pos, node_color=color_map, label=labels, alpha=0.1,
-                               linewidths=0.1, ax=ax)
-        nx.draw_networkx_labels(graph, pos, ax=ax, labels=labels)
-        index = 0
-        for edge in graph.edges(data=True):
-            nx.draw_networkx_edges(graph, pos=pos, edgelist=[(edge[0], edge[1])], edge_color=colors[index],
-                                   arrowsize=weights[index] * 6, width=weights[index], ax=ax, node_size=1000)
-            index += 1
+        self._draw_variables = dict()
+        self._draw_variables["edges"] = edges
+        self._draw_variables["top_order_edges"] = top_order_edges
+        self._draw_variables["pos"] = pos
+        self._draw_variables["labels"] = labels
+        self._draw_variables["graph"] = graph
+        return self.draw_graph(ax)
+
+    @property
+    def plot(self):
+        if self._plot is not None:
+            return self._plot
+        fig, ax = plt.subplots()
+        ax = self.draw_reduced(ax)
         self._plot = fig, ax
         return self._plot
 
@@ -141,6 +194,7 @@ class QueryOrderTraversal(HsO):
         plt.show()
         self._plot = None
 
-    def save_results(self, path: str):
+    def save_results(self, path: str, dpi=600):
         fig, _ = self.plot
-        plt.savefig(path)
+        matplotlib.rcParams['pdf.use14corefonts'] = True
+        plt.savefig(path, dpi=dpi, bbox_inches="tight")

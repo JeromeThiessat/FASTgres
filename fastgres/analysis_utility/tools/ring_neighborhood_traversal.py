@@ -23,7 +23,7 @@ class RingNeighborhoodTraversal(Tool):
         super().__init__(archive_path, query_path)
         self._time_factor = None
         self._time_granularity = None
-        self.time_granularity = time_granularity
+        # self.time_granularity = time_granularity
         self._aggregated_archive = None
         self._query_names = query_names
         self._hints = hints
@@ -36,6 +36,10 @@ class RingNeighborhoodTraversal(Tool):
             self._used_dict = self.archive
 
     @property
+    def used_dict(self):
+        return self._used_dict
+
+    @property
     def op_mode(self):
         return self._op_mode
 
@@ -43,19 +47,19 @@ class RingNeighborhoodTraversal(Tool):
     def op_mode(self, new_mode: OperationMode):
         self._op_mode = new_mode
 
-    @property
-    def time_granularity(self):
-        return self._time_granularity
+    # @property
+    # def time_granularity(self):
+    #     return self._time_granularity
 
-    @time_granularity.setter
-    def time_granularity(self, new_granularity: Tg):
-        self._time_granularity = new_granularity
-        if self.time_granularity == Tg.SECONDS:
-            self._time_factor = 1.0
-        elif self.time_granularity == Tg.MINUTES:
-            self._time_factor = 60.0
-        elif self.time_granularity == Tg.HOURS:
-            self._time_factor = 3600.0
+    # @time_granularity.setter
+    # def time_granularity(self, new_granularity: Tg):
+    #     self._time_granularity = new_granularity
+    #     if self.time_granularity == Tg.SECONDS:
+    #         self._time_factor = 1.0
+    #     elif self.time_granularity == Tg.MINUTES:
+    #         self._time_factor = 60.0
+    #     elif self.time_granularity == Tg.HOURS:
+    #         self._time_factor = 3600.0
 
     @property
     def query_names(self):
@@ -80,8 +84,11 @@ class RingNeighborhoodTraversal(Tool):
     def _calculate_agg_archive(self):
         agg_archive = dict()
         for hint_value in range(2 ** len(self.hints)):
-            agg_archive[hint_value] = round(sum([self._used_dict[query_name][str(hint_value)]
-                                                 for query_name in self.query_names]) / len(self.query_names), 4)
+            try:
+                agg_archive[hint_value] = round(sum([self.used_dict[query_name][str(hint_value)]
+                                                     for query_name in self.query_names]) / len(self.query_names), 4)
+            except KeyError:
+                pass
         return agg_archive
 
     @property
@@ -92,7 +99,7 @@ class RingNeighborhoodTraversal(Tool):
 
     def calculate_one_ring(self, hint_set_int: int, reduced_space: list[int] = None) -> list[int]:
         # [1, 0, 0, 1, 1, 0]
-        binary_rep = int_to_binary(hint_set_int)
+        binary_rep = int_to_binary(hint_set_int, len(self.hints))
         if self.op_mode.value not in binary_rep:
             # we are done in the last step
             return []
@@ -108,13 +115,16 @@ class RingNeighborhoodTraversal(Tool):
             result = list(set(result).intersection(set(reduced_space)))
         return result
 
-    def calculate_one_ring_of_order(self, order: list[Hint], reduced_space: list[int] = None) -> list[int]:
+    def calculate_one_ring_of_order(self, order: list[Hint], reduced_space: dict[int, list[int]] = None) -> list[int]:
         int_order = [hint.value for hint in order]
         # initialization 0 - 63
         current_value = 2**len(self.hints)-1 if self.op_mode == self.OperationMode.SUB else 0
         one_ring = [current_value]
         for idx in range(len(int_order)):
-            one_ring.extend(self.calculate_one_ring(current_value, reduced_space))
+            if reduced_space is not None:
+                one_ring.extend(self.calculate_one_ring(current_value, reduced_space[idx+1]))
+            else:
+                one_ring.extend(self.calculate_one_ring(current_value))
             # subtract current order item
             current_value = current_value - int_order[idx] if self.op_mode == self.OperationMode.SUB \
                 else current_value + int_order[idx]
@@ -127,8 +137,11 @@ class RingNeighborhoodTraversal(Tool):
             # iterations allow spreading factors to be used
             current_one_ring = list()
             for start in current_start:
-                [current_one_ring.append(entry) if entry not in current_one_ring else current_one_ring
-                 for entry in self.calculate_one_ring(start)]
+                try:
+                    [current_one_ring.append(entry) if entry not in current_one_ring else current_one_ring
+                     for entry in self.calculate_one_ring(start)]
+                except KeyError:
+                    pass
             current_one_ring = current_one_ring
             # break condition -> empty one ring, we reached 0 or 63
             if not current_one_ring:
@@ -172,7 +185,8 @@ class RingNeighborhoodTraversal(Tool):
         hints_set_ints.remove(0)
         occurrences = np.subtract(len(hints_set_ints),
                                   np.sum(
-                                      np.array([int_to_binary(hint_set_int) for hint_set_int in hints_set_ints]
+                                      np.array([int_to_binary(hint_set_int, len(self.hints))
+                                                for hint_set_int in hints_set_ints]
                                                ), axis=0))
         hint_dict = dict(zip(self.hints, occurrences))
         return dict(sorted(hint_dict.items(), key=lambda item: item[1], reverse=desc))

@@ -160,3 +160,5 @@ figures/
 pre_split_queries/
 Digraph.gv
 Digraph.gv.pdf
+fastgres/archives/job/16.1/all_hints.json
+fastgres/archives/job/16.1/all_hints_ig.json

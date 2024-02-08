@@ -1,7 +1,11 @@
+import math
+
+import matplotlib
 import numpy as np
 import pandas as pd
 import networkx as nx
 from matplotlib import pyplot as plt
+from matplotlib.patches import Rectangle
 
 from fastgres.analysis_utility.tools.ring_neighborhood_traversal import RingNeighborhoodTraversal as RnT
 from fastgres.analysis_utility import tool
@@ -22,6 +26,7 @@ class HintSetOrder(RnT):
         self._graph_results = None
         self._eval_config = None
         self._results = None
+        self._draw_variables = None
 
     @property
     def results(self):
@@ -112,6 +117,42 @@ class HintSetOrder(RnT):
             edge_tuples.add((order[i - 1], order[i]))
         return edge_tuples
 
+    def draw_graph(self, ax):
+        if self._draw_variables is None:
+            raise ValueError("Drawing variables not set.")
+        edges = self._draw_variables["edges"]
+        top_order_edges = self._draw_variables["top_order_edges"]
+        pos = self._draw_variables["pos"]
+        labels = self._draw_variables["labels"]
+        graph = self._draw_variables["graph"]
+        # fig, ax = plt.subplots()
+        # graph = nx.DiGraph()
+        for edge in edges:
+            if edge in top_order_edges:
+                color = "#009900"
+                pen_width = 1.6
+            else:
+                color = "#000000"
+                pen_width = 0.8
+            graph.add_edge(str(edge[0]), str(edge[1]), color=color, weight=pen_width)
+
+        colors = [graph[u][v]['color'] for u, v in graph.edges()]
+        color_map = ['w' for _ in graph]
+        # labels = [str(node) for node in graph]
+        weights = [float(graph[u][v]['weight']) for u, v in graph.edges()]
+        nx.draw_networkx_nodes(graph, pos=pos, node_color=color_map, label=labels, alpha=0.1,
+                               linewidths=0.1, ax=ax)
+        index = 0
+        for edge in graph.edges(data=True):
+            nx.draw_networkx_edges(graph, pos=pos, edgelist=[(edge[0], edge[1])], edge_color=colors[index],
+                                   arrowsize=weights[index] * 6, width=weights[index], ax=ax, node_size=1750,
+                                   node_shape="s")
+            index += 1
+        nx.draw_networkx_labels(graph, pos, ax=ax, labels=labels)
+        # reset after plot
+        self._draw_variables = None
+        return ax
+
     @property
     def plot(self):
         if self._plot is not None:
@@ -127,7 +168,7 @@ class HintSetOrder(RnT):
             for i in range(1, len(order_pair)):
                 top_order_edges.add((order_pair[i - 1], order_pair[i]))
 
-        level_uniques = [[63]]
+        level_uniques = [[2**len(self.hints)-1]]
         for level in range(1, len(self.hints) + 1):
             single_level_uniques = list(set([order[level] for order in orders]))
             level_uniques.append(single_level_uniques)
@@ -135,41 +176,31 @@ class HintSetOrder(RnT):
         edge_tuples = set()
         for order_pair in orders:
             edge_tuples = edge_tuples.union(self.edges_from_order(order_pair))
-            # for i in range(1, len(order_pair)):
-            #     edge_tuples.add((order_pair[i - 1], order_pair[i]))
 
-        fig, ax = plt.subplots()
+        # fig, ax = plt.subplots()
         graph = nx.DiGraph()
         pos = dict()
+        labels = dict()
         for level_idx in range(len(self.hints) + 1):
             for i in range(len(level_uniques[level_idx])):
                 unique = level_uniques[level_idx][i]
                 mean = round(len(level_uniques[level_idx]) / 2, 1)
                 graph.add_node(unique, pos=(i - mean, -level_idx))
                 # needs both
+                labels[unique] = f"{unique}"
+                labels[str(unique)] = f"{unique}"
                 pos[unique] = np.array([i - mean, -level_idx])
                 pos[str(unique)] = np.array([i - mean, -level_idx])
 
-        for edge in edge_tuples:
-            if edge in top_order_edges:
-                color = "#009900"
-                pen_width = 1.6
-            else:
-                color = "#000000"
-                pen_width = 0.8
-            graph.add_edge(str(edge[0]), str(edge[1]), color=color, weight=pen_width)
+        self._draw_variables = dict()
+        self._draw_variables["edges"] = edge_tuples
+        self._draw_variables["top_order_edges"] = top_order_edges
+        self._draw_variables["pos"] = pos
+        self._draw_variables["labels"] = labels
+        self._draw_variables["graph"] = graph
 
-        colors = [graph[u][v]['color'] for u, v in graph.edges()]
-        color_map = ['w' for _ in graph]
-        labels = [str(node) for node in graph]
-        weights = [float(graph[u][v]['weight']) for u, v in graph.edges()]
-        nx.draw_networkx_nodes(graph, pos=pos, node_color=color_map, label=labels, alpha=0.1, linewidths=0.1, ax=ax)
-        nx.draw_networkx_labels(graph, pos, ax=ax)
-        index = 0
-        for edge in graph.edges(data=True):
-            nx.draw_networkx_edges(graph, pos=pos, edgelist=[(edge[0], edge[1])], edge_color=colors[index],
-                                   arrowsize=weights[index] * 6, width=weights[index], ax=ax)
-            index += 1
+        fig, ax = plt.subplots()
+        ax = self.draw_graph(ax)
         self._plot = fig, ax
         return self._plot
 
@@ -178,6 +209,7 @@ class HintSetOrder(RnT):
         plt.show()
         self._plot = None
 
-    def save_results(self, path: str):
+    def save_results(self, path: str, dpi=600):
         fig, _ = self.plot
-        plt.savefig(path)
+        matplotlib.rcParams['pdf.use14corefonts'] = True
+        plt.savefig(path, dpi=dpi, bbox_inches="tight")

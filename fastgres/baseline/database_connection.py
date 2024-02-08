@@ -4,7 +4,7 @@ import time
 import psycopg2
 import psycopg2 as pg
 
-from fastgres.baseline.hint_sets import HintSet, set_hints
+from fastgres.baseline.hint_sets import HintSet
 from fastgres.baseline.log_utils import get_logger
 
 
@@ -94,6 +94,7 @@ class DatabaseConnection:
             start = time.time()
             cursor.execute(statement)
             stop = time.time()
-        except psycopg2.DatabaseError:
+        except psycopg2.DatabaseError as e:
+            print(e)
             return None
         return stop - start

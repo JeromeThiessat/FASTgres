@@ -1,6 +1,7 @@
 import abc
 import enum
 import itertools
+import math
 import os
 import time
 
@@ -10,7 +11,7 @@ import warnings
 from matplotlib.colors import ListedColormap
 from copy import deepcopy
 
-from fastgres.baseline.utility import load_json
+from fastgres.baseline.utility import load_json, binary_to_int
 from fastgres.workloads.workload import Workload
 
 
@@ -40,7 +41,9 @@ def font(font_params: dict[FontParameter, int]):
             with plt.rc_context({fp.value: size for fp, size in font_params.items()}):
                 result = f(*args, **kwargs)
             return result
+
         return inner
+
     return decorator
 
     # # https://stackoverflow.com/a/14971193
@@ -86,7 +89,10 @@ def get_default_colors():
 
 
 def get_baseline(archive: dict, queries: list[str]) -> np.ndarray:
-    return np.array([archive[query_name]["63"] for query_name in queries])
+    hints = list(set(list(archive[list(archive.keys())[0]].keys())) - {"opt"})
+    top_hint = max([int(_) for _ in hints])
+    hint_count = int(math.log2(top_hint+1))
+    return np.array([archive[query_name][str(2**hint_count-1)] for query_name in queries])
 
 
 def get_opt(archive: dict, queries: list[str]) -> np.ndarray:
@@ -237,10 +243,15 @@ def get_pseudo_labeled_dict(archive: dict, interpolate_default: bool = False) ->
     """
     pseudo_dict = deepcopy(archive)
     faulty_entries = 0
+    hints = list(set(list(archive[list(archive.keys())[0]].keys())) - {"opt"})
+    top_hint = max([int(_) for _ in hints])
+    hint_count = int(math.log2(top_hint+1))
+    # print(f"using {hint_count} hints")
+    top_hint_set_int = binary_to_int([1]*hint_count)
     for query_name in archive:
-        pg_def = archive[query_name]["63"]
-        current_best_time = archive[query_name]["63"]
-        for int_idx in reversed(range(63)):
+        pg_def = archive[query_name][str(top_hint_set_int)]
+        current_best_time = archive[query_name][str(top_hint_set_int)]
+        for int_idx in reversed(range(top_hint_set_int)):
             try:
                 query_time = archive[query_name][str(int_idx)]
                 if query_time < current_best_time:
@@ -308,13 +319,13 @@ def get_labeling_time_of_combination(combination: list[int], archive: dict, quer
     return labeling_time
 
 
-def get_order_hint_sets(hint_sets: list[int], sub: bool=True) -> list[int]:
+def get_order_from_hint_sets(hint_sets: list[int], sub: bool = True) -> list[int]:
     order = list()
     for i in range(1, len(hint_sets)):
         if sub:
-            order.append(hint_sets[i-1] - hint_sets[i])
+            order.append(hint_sets[i - 1] - hint_sets[i])
         else:
-            order.append(hint_sets[i] - hint_sets[i-1])
+            order.append(hint_sets[i] - hint_sets[i - 1])
     return order
 
 
